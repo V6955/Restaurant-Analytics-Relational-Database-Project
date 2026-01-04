@@ -1,0 +1,142 @@
+USE restaurant_db;
+
+DROP VIEW IF EXISTS vw_restaurants_location;
+CREATE VIEW vw_restaurants_location AS
+SELECT
+    Restaurant.Restaurant_ID,
+    Restaurant.Restaurant_Name,
+    City.City_Name,
+    Country.Country_Name
+FROM Restaurant
+JOIN City ON Restaurant.City_ID = City.City_ID
+JOIN Country ON City.Country_ID = Country.Country_ID;
+
+-- This view shows each restaurant along with its city and country.
+
+DROP VIEW IF EXISTS vw_high_rated_cities;
+CREATE VIEW vw_high_rated_cities AS
+SELECT
+    City.City_Name,
+    AVG(Rating.Rating) AS Average_Rating
+FROM Restaurant
+JOIN City ON Restaurant.City_ID = City.City_ID
+JOIN Rating ON Restaurant.Rating_ID = Rating.Rating_ID
+GROUP BY City.City_Name
+HAVING AVG(Rating.Rating) >= 4;
+
+-- This view shows cities whose restaurants have an average rating of 4 or higher.
+
+DROP VIEW IF EXISTS vw_above_average_restaurants;
+CREATE VIEW vw_above_average_restaurants AS
+SELECT
+    Restaurant.Restaurant_ID,
+    Restaurant.Restaurant_Name,
+    Rating.Rating
+FROM Restaurant
+JOIN Rating ON Restaurant.Rating_ID = Rating.Rating_ID
+WHERE Rating.Rating >
+      (SELECT AVG(Rating.Rating) FROM Rating);
+
+-- This view shows restaurants with ratings higher than the overall average rating.
+
+DROP VIEW IF EXISTS vw_popular_cuisines;
+CREATE VIEW vw_popular_cuisines AS
+SELECT
+    Cuisine.Cuisine_Name,
+    COUNT(Restaurant_Cuisine.Restaurant_ID) AS Restaurant_Count
+FROM Cuisine
+JOIN Restaurant_Cuisine
+ON Cuisine.Cuisine_ID = Restaurant_Cuisine.Cuisine_ID
+GROUP BY Cuisine.Cuisine_Name
+HAVING COUNT(Restaurant_Cuisine.Restaurant_ID) >
+       (
+           SELECT AVG(Cuisine_Total)
+           FROM (
+               SELECT COUNT(Restaurant_Cuisine.Restaurant_ID) AS Cuisine_Total
+               FROM Restaurant_Cuisine
+               GROUP BY Restaurant_Cuisine.Cuisine_ID
+           ) AS Cuisine_Average_Table
+       );
+
+-- This view shows cuisines that are offered by more restaurants than average.
+
+DROP PROCEDURE IF EXISTS sp_get_restaurants_by_city;
+DELIMITER //
+CREATE PROCEDURE sp_get_restaurants_by_city(IN CityName VARCHAR(100))
+BEGIN
+    SELECT
+        Restaurant.Restaurant_Name,
+        City.City_Name,
+        Rating.Rating
+    FROM Restaurant
+    JOIN City ON Restaurant.City_ID = City.City_ID
+    JOIN Rating ON Restaurant.Rating_ID = Rating.Rating_ID
+    WHERE City.City_Name = CityName;
+END //
+DELIMITER ;
+
+-- This procedure returns all restaurants located in a given city.
+
+-- CALL sp_get_restaurants_by_city('New Delhi');
+
+DROP PROCEDURE IF EXISTS sp_get_restaurants_by_cuisine;
+DELIMITER //
+CREATE PROCEDURE sp_get_restaurants_by_cuisine(IN CuisineName VARCHAR(100))
+BEGIN
+    SELECT
+        Restaurant.Restaurant_Name,
+        Cuisine.Cuisine_Name
+    FROM Restaurant
+    JOIN Restaurant_Cuisine
+        ON Restaurant.Restaurant_ID = Restaurant_Cuisine.Restaurant_ID
+    JOIN Cuisine
+        ON Restaurant_Cuisine.Cuisine_ID = Cuisine.Cuisine_ID
+    WHERE Cuisine.Cuisine_Name = CuisineName;
+END //
+DELIMITER ;
+
+-- This procedure returns all restaurants that serve a specific cuisine.
+
+-- CALL sp_get_restaurants_by_cuisine('Italian');
+
+DROP FUNCTION IF EXISTS fn_restaurant_count_by_city;
+DELIMITER //
+CREATE FUNCTION fn_restaurant_count_by_city(CityID INT)
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE TotalRestaurants INT;
+
+    SELECT COUNT(Restaurant.Restaurant_ID)
+    INTO TotalRestaurants
+    FROM Restaurant
+    WHERE Restaurant.City_ID = CityID;
+
+    RETURN TotalRestaurants;
+END //
+DELIMITER ;
+
+-- This function returns the number of restaurants in a given city.
+
+-- SELECT fn_restaurant_count_by_city(15);
+
+DROP FUNCTION IF EXISTS fn_rating_label;
+DELIMITER //
+CREATE FUNCTION fn_rating_label(RatingValue INT)
+RETURNS VARCHAR(20)
+DETERMINISTIC
+BEGIN
+    RETURN
+        CASE
+            WHEN RatingValue = 5 THEN 'Excellent'
+            WHEN RatingValue = 4 THEN 'Very Good'
+            WHEN RatingValue = 3 THEN 'Good'
+            ELSE 'Average'
+        END;
+END //
+DELIMITER ;
+
+-- This function converts a numeric rating into a descriptive label.
+
+-- SELECT fn_rating_label(4);
+
